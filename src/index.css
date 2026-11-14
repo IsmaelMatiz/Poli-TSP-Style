@@ -2,5 +2,14 @@
 
 
 @theme {
-  /* aquí tus tokens: colores, fuentes, radios */
+  --color-verde: #1E3A2B;
+  --color-ambar: #D9932F;
+  --color-main-bg: #F3F5F0;
+  --color-second-bg: #DCE6D7;
+  --color-nav-pill: #E3E9DF;
+  --color-borders: #C8D4C3;
+  --color-secondary-color: #3D5A49; 
+  --color-cat-shirt: #BFD0B8;
+  --color-cat-pants: #E9D2A8;
+  --color-cat-shoes: #C9D5DA;
 }
