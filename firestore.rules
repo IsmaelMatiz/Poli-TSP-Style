@@ -1,0 +1,44 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Seguridad de productos
+    match /productos/{productoId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Seguridad de carritos
+    match /carritos/{usuarioId} {
+
+      function esPropietario() {
+        return request.auth != null
+          && request.auth.uid == usuarioId;
+      }
+
+      allow read: if esPropietario();
+
+      allow create, update: if esPropietario()
+  && request.resource.data.keys().hasOnly(['items'])
+  && request.resource.data.keys().hasAll(['items'])
+  && request.resource.data.items is list;
+
+      allow delete: if esPropietario();
+    }
+
+    // Seguridad de pedidos
+    match /pedidos/{pedidoId} {
+
+      function esPropietario() {
+        return request.auth != null
+          && resource.data.usuarioId == request.auth.uid;
+      }
+
+      allow get: if esPropietario();
+      allow list: if false;
+      allow create: if false;
+      allow update, delete: if false;
+    }
+  }
+}
