@@ -1,5 +1,5 @@
+
 const { test } = require('node:test');
-const assert = require('node:assert/strict');
 
 const {
   initializeTestEnvironment,
@@ -11,146 +11,126 @@ const {
   doc,
   getDoc,
   setDoc,
-  deleteDoc
+  deleteDoc,
+  updateDoc
 } = require('firebase/firestore');
 
-test('Seguridad de productos', async () => {
-
-  const entorno = await initializeTestEnvironment({
+async function crearEntorno() {
+  return initializeTestEnvironment({
     projectId: 'demo-polistyle',
     firestore: {
       host: '127.0.0.1',
       port: 8080
     }
   });
+}
+
+// PRUEBA 1: PRODUCTOS
+test('Seguridad de productos', async () => {
+  const entorno = await crearEntorno();
 
   try {
-    const usuario = entorno.unauthenticatedContext();
-    const db = usuario.firestore();
+    const db = entorno.unauthenticatedContext().firestore();
+    const producto = doc(db, 'products', 'producto1');
 
-    const producto = doc(db, 'productos', 'producto1');
-
-    // Prueba 1: permitir consultar productos
     await assertSucceeds(getDoc(producto));
-    console.log('Prueba 1: lectura permitida');
+    console.log('Productos: lectura pública permitida');
 
-    // Prueba 2: impedir modificar productos
     await assertFails(setDoc(producto, {
       nombre: 'Camiseta',
       precio: 50000
     }));
-    console.log('Prueba 2: escritura bloqueada');
-
+    console.log('Productos: escritura bloqueada');
   } finally {
     await entorno.cleanup();
   }
 });
-test('Seguridad de carritos', async () => {
 
-  const entorno = await initializeTestEnvironment({
-    projectId: 'demo-polistyle',
-    firestore: {
-      host: '127.0.0.1',
-      port: 8080
-    }
-  });
+// PRUEBA 2: CARRITOS
+test('Seguridad de carritos', async () => {
+  const entorno = await crearEntorno();
 
   try {
-    const usuario1 = entorno.authenticatedContext('usuario1');
-    const usuario2 = entorno.authenticatedContext('usuario2');
+    const db1 = entorno.authenticatedContext('usuario1').firestore();
+    const db2 = entorno.authenticatedContext('usuario2').firestore();
+    const dbAnonimo = entorno.unauthenticatedContext().firestore();
 
-    const db1 = usuario1.firestore();
-    const db2 = usuario2.firestore();
+    const ruta = ['users', 'usuario1', 'cart', 'carrito1'];
+    const carrito = doc(db1, ...ruta);
 
-    const carrito = doc(db1, 'carritos', 'usuario1');
-// El propietario no puede guardar items como texto
-await assertFails(
-  setDoc(carrito, {
-    items: 'camiseta'
-  })
-);
-console.log('Carrito: formato incorrecto bloqueado');
-    // El propietario puede crear su carrito
+    await assertFails(setDoc(carrito, {
+      items: 'camiseta'
+    }));
+    console.log('Carritos: formato incorrecto bloqueado');
+
     await assertSucceeds(setDoc(carrito, {
       items: []
     }));
-    console.log('Carrito: creación permitida al propietario');
+    console.log('Carritos: creación del propietario permitida');
 
-    // Otro usuario no puede consultar ese carrito
-    await assertFails(
-      getDoc(doc(db2, 'carritos', 'usuario1'))
-    );
-    console.log('Carrito: lectura ajena bloqueada');
+    await assertSucceeds(getDoc(carrito));
+    console.log('Carritos: lectura del propietario permitida');
 
-    // Otro usuario no puede modificarlo
-    await assertFails(
-      setDoc(doc(db2, 'carritos', 'usuario1'), {
-        items: []
-      })
-    );
-    console.log('Carrito: escritura ajena bloqueada');
+    await assertFails(getDoc(doc(db2, ...ruta)));
+    console.log('Carritos: lectura ajena bloqueada');
 
-    // El propietario puede eliminar su carrito
+    await assertFails(setDoc(doc(db2, ...ruta), {
+      items: []
+    }));
+    console.log('Carritos: escritura ajena bloqueada');
+
+    await assertFails(getDoc(doc(dbAnonimo, ...ruta)));
+    console.log('Carritos: lectura anónima bloqueada');
+
     await assertSucceeds(deleteDoc(carrito));
-    console.log('Carrito: eliminación permitida al propietario');
-
+    console.log('Carritos: eliminación del propietario permitida');
   } finally {
     await entorno.cleanup();
   }
 });
-test('Seguridad de pedidos', async () => {
 
-  const entorno = await initializeTestEnvironment({
-    projectId: 'demo-polistyle',
-    firestore: {
-      host: '127.0.0.1',
-      port: 8080
-    }
-  });
+// PRUEBA 3: PEDIDOS
+test('Seguridad de pedidos', async () => {
+  const entorno = await crearEntorno();
 
   try {
-    const usuario1 = entorno.authenticatedContext('usuario1');
-    const usuario2 = entorno.authenticatedContext('usuario2');
+    const db1 = entorno.authenticatedContext('usuario1').firestore();
+    const db2 = entorno.authenticatedContext('usuario2').firestore();
+    const dbAnonimo = entorno.unauthenticatedContext().firestore();
 
-    const db1 = usuario1.firestore();
-    const db2 = usuario2.firestore();
+    const pedido = doc(db1, 'orders', 'pedido1');
 
-    const pedido = doc(db1, 'pedidos', 'pedido1');
+    await assertSucceeds(setDoc(pedido, {
+      usuarioId: 'usuario1',
+      total: 50000
+    }));
+    console.log('Pedidos: creación propia permitida');
 
-    // Crear un pedido de prueba sin saltarnos la seguridad
-    await entorno.withSecurityRulesDisabled(async (contexto) => {
-      await setDoc(
-        doc(contexto.firestore(), 'pedidos', 'pedido1'),
-        {
-          usuarioId: 'usuario1',
-          total: 50000
-        }
-      );
-    });
-
-    // El propietario puede consultar su pedido
     await assertSucceeds(getDoc(pedido));
-    console.log('Pedido: lectura del propietario permitida');
+    console.log('Pedidos: lectura propia permitida');
 
-    // Otro usuario no puede consultar el pedido
-    await assertFails(
-      getDoc(doc(db2, 'pedidos', 'pedido1'))
-    );
-    console.log('Pedido: lectura ajena bloqueada');
+    await assertFails(getDoc(doc(db2, 'orders', 'pedido1')));
+    console.log('Pedidos: lectura ajena bloqueada');
 
-    // El cliente no puede crear pedidos directamente
-    await assertFails(
-      setDoc(doc(db1, 'pedidos', 'pedido2'), {
-        usuarioId: 'usuario1',
-        total: 30000
-      })
-    );
-    console.log('Pedido: creación directa bloqueada');
+    await assertFails(setDoc(doc(db2, 'orders', 'pedido2'), {
+      usuarioId: 'usuario1',
+      total: 30000
+    }));
+    console.log('Pedidos: creación a nombre de otro bloqueada');
 
-    // El propietario tampoco puede eliminar pedidos
+    await assertFails(setDoc(doc(dbAnonimo, 'orders', 'pedido3'), {
+      usuarioId: 'usuario1',
+      total: 30000
+    }));
+    console.log('Pedidos: creación anónima bloqueada');
+
+    await assertFails(updateDoc(pedido, {
+      total: 1000
+    }));
+    console.log('Pedidos: modificación bloqueada');
+
     await assertFails(deleteDoc(pedido));
-    console.log('Pedido: eliminación bloqueada');
-
+    console.log('Pedidos: eliminación bloqueada');
   } finally {
     await entorno.cleanup();
   }

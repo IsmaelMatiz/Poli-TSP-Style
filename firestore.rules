@@ -4,17 +4,17 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Seguridad de productos
-    match /productos/{productoId} {
+    match /products/{productId} {
       allow read: if true;
       allow write: if false;
     }
 
     // Seguridad de carritos
-    match /carritos/{usuarioId} {
+    match /users/{uid}/cart/{cartId} {
 
       function esPropietario() {
         return request.auth != null
-          && request.auth.uid == usuarioId;
+          && request.auth.uid == uid;
       }
 
       allow read: if esPropietario();
@@ -27,18 +27,28 @@ service cloud.firestore {
       allow delete: if esPropietario();
     }
 
-    // Seguridad de pedidos
-    match /pedidos/{pedidoId} {
+ // Seguridad de pedidos
+match /orders/{orderId} {
 
-      function esPropietario() {
-        return request.auth != null
-          && resource.data.usuarioId == request.auth.uid;
-      }
+  function estaAutenticado() {
+    return request.auth != null;
+  }
 
-      allow get: if esPropietario();
-      allow list: if false;
-      allow create: if false;
-      allow update, delete: if false;
-    }
+  function esPropietario() {
+    return estaAutenticado()
+      && resource.data.usuarioId == request.auth.uid;
+  }
+
+  // El usuario puede consultar sus pedidos
+  allow get: if esPropietario();
+
+  // El usuario puede crear sus propios pedidos
+  allow create: if estaAutenticado()
+    && request.resource.data.keys().hasAll(['usuarioId'])
+    && request.resource.data.usuarioId == request.auth.uid;
+
+  // No permitir consultas generales ni modificaciones
+  allow list, update, delete: if false;
+}
   }
 }
