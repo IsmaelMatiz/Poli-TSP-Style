@@ -1,0 +1,54 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Seguridad de productos
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Seguridad de carritos
+    match /users/{uid}/cart/{cartId} {
+
+      function esPropietario() {
+        return request.auth != null
+          && request.auth.uid == uid;
+      }
+
+      allow read: if esPropietario();
+
+      allow create, update: if esPropietario()
+  && request.resource.data.keys().hasOnly(['items'])
+  && request.resource.data.keys().hasAll(['items'])
+  && request.resource.data.items is list;
+
+      allow delete: if esPropietario();
+    }
+
+ // Seguridad de pedidos
+match /orders/{orderId} {
+
+  function estaAutenticado() {
+    return request.auth != null;
+  }
+
+  function esPropietario() {
+    return estaAutenticado()
+      && resource.data.usuarioId == request.auth.uid;
+  }
+
+  // El usuario puede consultar sus pedidos
+  allow get: if esPropietario();
+
+  // El usuario puede crear sus propios pedidos
+  allow create: if estaAutenticado()
+    && request.resource.data.keys().hasAll(['usuarioId'])
+    && request.resource.data.usuarioId == request.auth.uid;
+
+  // No permitir consultas generales ni modificaciones
+  allow list, update, delete: if false;
+}
+  }
+}
